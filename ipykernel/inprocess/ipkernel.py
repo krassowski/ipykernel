@@ -5,6 +5,7 @@
 
 import logging
 import sys
+import typing as t
 from contextlib import contextmanager
 
 from IPython.core.interactiveshell import InteractiveShellABC
