@@ -447,7 +447,9 @@ class OutStream(TextIOBase):
         self.pub_thread = pub_thread
         self.name = name
         self.topic = b"stream." + name.encode()
-        self._parent_header: Dict[str, Any] = contextvars.ContextVar("parent_header")
+        self._parent_header: contextvars.ContextVar[Dict[str, Any]] = contextvars.ContextVar(
+            "parent_header"
+        )
         self._parent_header.set({})
         self._thread_parents = {}
         self._parent_header_global = {}

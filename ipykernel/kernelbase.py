@@ -277,8 +277,8 @@ class Kernel(SingletonConfigurable):
         # Kernel application may swap stdout and stderr to OutStream,
         # which is the case in `IPKernelApp.init_io`, hence `sys.stdout`
         # can already by different from TextIO at initialization time.
-        self.stdout: t.Union[OutStream, t.TextIO] = sys.stdout
-        self.stderr: t.Union[OutStream, t.TextIO] = sys.stderr
+        self._stdout: OutStream | t.TextIO = sys.stdout
+        self._stderr: OutStream | t.TextIO = sys.stderr
 
         # Build dict of handlers for message types
         self.shell_handlers = {}
@@ -363,8 +363,8 @@ class Kernel(SingletonConfigurable):
             except Exception:
                 self.log.error("Exception in control handler:", exc_info=True)  # noqa: G201
 
-        self.stdout.flush()
-        self.stderr.flush()
+        sys.stdout.flush()
+        sys.stderr.flush()
         self._publish_status("idle", "control")
         # flush to ensure reply is sent
         if self.control_stream:
@@ -446,8 +446,8 @@ class Kernel(SingletonConfigurable):
                 except Exception:
                     self.log.debug("Unable to signal in post_handler_hook:", exc_info=True)
 
-        self.stdout.flush()
-        self.stderr.flush()
+        sys.stdout.flush()
+        sys.stderr.flush()
         self._publish_status("idle", "shell")
         # flush to ensure reply is sent before
         # handling the next request
@@ -775,8 +775,8 @@ class Kernel(SingletonConfigurable):
             reply_content = await reply_content
 
         # Flush output before sending the reply.
-        self.stdout.flush()
-        self.stderr.flush()
+        sys.stdout.flush()
+        sys.stderr.flush()
         # FIXME: on rare occasions, the flush doesn't seem to make it to the
         # clients... This seems to mitigate the problem, but we definitely need
         # to better understand what's going on.
@@ -1110,8 +1110,8 @@ class Kernel(SingletonConfigurable):
         reply_content, result_buf = self.do_apply(content, bufs, msg_id, md)
 
         # flush i/o
-        self.stdout.flush()
-        self.stderr.flush()
+        sys.stdout.flush()
+        sys.stderr.flush()
 
         md = self.finish_metadata(parent, md, reply_content)
         if not self.session:
@@ -1276,8 +1276,8 @@ class Kernel(SingletonConfigurable):
 
     def _input_request(self, prompt, ident, parent, password=False):
         # Flush output before making the request.
-        self.stderr.flush()
-        self.stdout.flush()
+        sys.stderr.flush()
+        sys.stdout.flush()
 
         # flush the stdin socket, to purge stale replies
         while True:

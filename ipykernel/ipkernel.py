@@ -727,11 +727,11 @@ class IPythonKernel(KernelBase):
         and associate the thread's output with the parent header frame, which allows
         to direct the outputs to the cell which started the thread.
 
-        This is a no-op if the `self.stdout` and `self.stderr` are not
+        This is a no-op if the `self._stdout` and `self._stderr` are not
         sub-classes of `OutStream`.
         """
-        stdout = self.stdout
-        stderr = self.stderr
+        stdout = self._stdout
+        stderr = self._stderr
 
         def start_closure(self: threading.Thread):
             """Wrap the `threading.Thread.start` to intercept thread identity.
@@ -756,14 +756,14 @@ class IPythonKernel(KernelBase):
         The implementation enumerates the threads because there is no "exit" hook yet,
         but there might be one in the future: https://bugs.python.org/issue14073
 
-        This is a no-op if the `self.stdout` and `self.stderr` are not
+        This is a no-op if the `self._stdout` and `self._stderr` are not
         sub-classes of `OutStream`.
         """
         # Only run before the garbage collector starts
         if phase != "start":
             return
         active_threads = {thread.ident for thread in threading.enumerate()}
-        for stream in [self.stdout, self.stderr]:
+        for stream in [self._stdout, self._stderr]:
             if isinstance(stream, OutStream):
                 thread_parents = stream._thread_parents
                 for identity in list(thread_parents.keys()):
