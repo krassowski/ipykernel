@@ -23,6 +23,7 @@ from .comm.comm import BaseComm
 from .comm.manager import CommManager
 from .compiler import XCachingCompiler
 from .eventloops import _use_appnope
+from .interrupt import InterruptEscalator
 from .kernelbase import Kernel as KernelBase
 from .kernelbase import _accepts_parameters
 from .zmqshell import ZMQInteractiveShell
@@ -83,6 +84,17 @@ class IPythonKernel(KernelBase):
     use_experimental_completions = Bool(
         True,
         help="Set this flag to False to deactivate the use of experimental IPython completion APIs.",
+    ).tag(config=True)
+
+    escalate_interrupts = Bool(
+        True,
+        help="""Force a second interrupt through code that caught the first one.
+
+        A KeyboardInterrupt can be swallowed by a bare ``except``, which leaves
+        the Stop button looking broken. When that happens the kernel says so and
+        raises ``ipykernel.interrupt.ForcedInterrupt`` if the user interrupts
+        again shortly after. Needs Python 3.12.
+        """,
     ).tag(config=True)
 
     debugpy_stream = Instance(ZMQStream, allow_none=True)
@@ -155,6 +167,8 @@ class IPythonKernel(KernelBase):
         self.shell.displayhook.topic = self._topic("execute_result")  # type:ignore[attr-defined]
         self.shell.display_pub.session = self.session  # type:ignore[attr-defined]
         self.shell.display_pub.pub_socket = self.iopub_socket  # type:ignore[attr-defined]
+
+        self._interrupts = InterruptEscalator(report=self._report_ignored_interrupt)
 
         self.comm_manager = comm.get_comm_manager()
 
@@ -317,6 +331,28 @@ class IPythonKernel(KernelBase):
         # Ignore the incrementing done by KernelBase, in favour of our shell's
         # execution counter.
         pass
+
+    def _report_ignored_interrupt(self, message: str) -> None:
+        """Tell the user that the running code is ignoring interrupts."""
+        print(message, file=sys.stderr)
+
+    def _sigint_handler(self, signum, frame):
+        """Raise KeyboardInterrupt, and watch for the code ignoring it."""
+        self._interrupts.note_interrupt()
+        signal.default_int_handler(signum, frame)
+
+    def pre_handler_hook(self):
+        """Install the SIGINT handler for the duration of a message handler."""
+        handler = self._sigint_handler if self.escalate_interrupts else signal.default_int_handler
+        # off the main thread (subshells) this raises, which leaves the
+        # escalator disarmed, and signals do not reach those threads anyway
+        self.saved_sigint_handler = signal.signal(signal.SIGINT, handler)
+        self._interrupts.start()
+
+    def post_handler_hook(self):
+        """Restore the previous SIGINT handler."""
+        self._interrupts.stop()
+        signal.signal(signal.SIGINT, self.saved_sigint_handler)
 
     @contextmanager
     def _cancel_on_sigint(self, future):
